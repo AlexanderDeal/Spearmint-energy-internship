@@ -1,0 +1,212 @@
+"""
+Run the get_snowflake_data.py file to create a csv
+add the throughput_data_train csv path to the file_train variable
+"""
+
+import matplotlib.pyplot as plt
+from sklearn import linear_model
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.metrics import (
+    mean_absolute_error,
+    median_absolute_error,
+    mean_absolute_percentage_error,
+    mean_squared_error,
+    r2_score
+)
+from sklearn.feature_selection import SelectKBest, f_regression
+import numpy as np
+import pandas as pd
+
+
+def mae_reduction(y_true, y_pred):
+    median = np.median(y_true)
+    median_mae = mean_absolute_error(y_true, np.repeat([median], len(y_true)))
+    mae = mean_absolute_error(y_true, y_pred)
+    return (median_mae - mae) / median_mae
+
+
+def compute_forecast_metrics(y_true, y_pred):
+    print('Forecast Metrics: ')
+    return {"MSE": mean_squared_error(y_true, y_pred),
+            "MAE": mean_absolute_error(y_true, y_pred),
+            "MAD": median_absolute_error(y_true, y_pred),
+            "R2": r2_score(y_true, y_pred),
+            "MAPE": mean_absolute_percentage_error(y_true, y_pred),
+            "MAER": mae_reduction(y_true, y_pred)}
+
+
+# add csv path here
+file_train = pd.read_csv("")
+
+date_time = pd.to_datetime(file_train['DATETIME'])
+test_start_index = -1
+
+for index, dt in enumerate(date_time):
+    if dt.year == 2024 and dt.month == 4:
+        test_start_index = index
+        break
+
+
+date_time_test = date_time[test_start_index:]
+
+reg_up_train = file_train['REG UP'].iloc[:test_start_index]
+reg_up_test = file_train['REG UP'].iloc[test_start_index:]
+
+reg_down_train = file_train['REG DOWN'].iloc[:test_start_index]
+reg_down_test = file_train['REG DOWN'].iloc[test_start_index:]
+
+features = [
+    'LOAD ERCOT', 'LOAD WEST ERCOT', 'LOAD HOUSTON', 'LOAD SOUTH', 'LOAD NORTH ERCOT',
+    'TEMP H-I', 'TEMP V-A', 'TEMP SA-I', 'TEMP DALLAS', 'TEMP EL PASO', 'TEMP DEL RIO', 'TEMP AMARILLO',
+    'SOLAR ERCOT', 'SOLAR FARWEST', 'SOLAR CENTEREAST', 'SOLAR SOUTHEAST', 'SOLAR FAREAST',
+    'WIND ERCOT', 'WIND WEST', 'WIND NORTH', 'WIND SOUTH', 'WIND COASTAL', 'WIND PANHANDLE',
+    'HOUR', 'DAY OF WEEK', 'WIND FRACTION', 'RENEWABLE FRACTION', 'SOLAR PERCENT CHANGE', 'WIND PERCENT CHANGE',
+    'SCED RAW GEN LAVACA', 'SCED RAW GEN CHISHOM GRID ENERGY STORAGE SYSTEM',
+    'ERCOT FUELMIX RT PWERSTOR HSL', 'ERCOT FUELMIX RT PWERSTOR GEN', 'ERCOT FUELMIX RT COALLIG GEN'
+]
+temp = file_train[features]
+data_train = temp[:test_start_index]
+data_test = temp[test_start_index:len(reg_up_test) + len(reg_up_train)]
+
+scaler = StandardScaler()
+data_train = scaler.fit_transform(data_train)
+data_test = scaler.transform(data_test)
+
+sample_size = 20  # the amount of features to be included in the model
+selector = SelectKBest(score_func=f_regression, k=sample_size)
+data_train = selector.fit_transform(data_train, reg_up_train.values.ravel())
+data_test = selector.transform(data_test)
+selected = selector.get_support(indices=True)
+
+poly = PolynomialFeatures(degree=2, include_bias=False)
+poly_features = poly.fit_transform(data_train)
+poly_test = poly.fit_transform(data_test)
+regr = linear_model.LinearRegression()
+regr.fit(poly_features, reg_up_train)
+reg_up_prediction = regr.predict(poly_test)
+
+hours = [[] for _ in range(24)]
+for index, i in enumerate(temp['HOUR'][test_start_index:]):
+    hours[i].append(index)
+
+# Make 0 and 1 be the bounds of the prediction
+for i in range(len(reg_up_prediction)):
+    if reg_up_prediction[i] < 0:
+        reg_up_prediction[i] = 0
+    elif reg_up_prediction[i] > 1:
+        reg_up_prediction[i] = 1
+
+print('REG UP THROUGHPUT:\n')
+print("Weights: ")
+
+for index, i in enumerate(regr.coef_):
+    if index >= sample_size or index >= len(features):
+        break
+    print(features[selected[index]], "{:.10f}".format(i))
+print('\nBias:', regr.intercept_, '\n')
+for key, value in compute_forecast_metrics(reg_up_test, reg_up_prediction).items():
+    print(f"{key}: {value}")
+print('\n')
+
+# Hourly error metrics
+'''
+reg_up_hourly_prediction = [[reg_up_prediction[i] for i in hour] for hour in hours]
+reg_up_test = reg_up_test.tolist()
+reg_up_hourly_test = [[reg_up_test[i] for i in hour] for hour in hours]
+for index in range(len(reg_up_hourly_prediction)):
+    print('HOUR', index)
+    for key, value in compute_forecast_metrics(reg_up_hourly_test[index], reg_up_hourly_prediction[index]).items():
+        print(f"{key}: {value}")
+    print()
+'''
+regr.fit(poly_features, reg_down_train)
+reg_down_prediction = regr.predict(poly_test)
+
+# Make 0 and 1 be the bounds of the prediction
+for i in range(len(reg_down_prediction)):
+    if reg_down_prediction[i] < 0:
+        reg_down_prediction[i] = 0
+    elif reg_down_prediction[i] > 1:
+        reg_down_prediction[i] = 1
+
+print('REG DOWN THROUGHPUT:\n')
+print("Weights: ")
+for index, i in enumerate(regr.coef_):
+    if index >= sample_size or index >= len(features):
+        break
+    print(features[selected[index]], "{:.10f}".format(i))
+print('\nBias:', regr.intercept_, '\n')
+for key, value in compute_forecast_metrics(reg_down_test, reg_down_prediction).items():
+    print(f"{key}: {value}")
+print()
+
+# Hourly error metrics
+'''
+reg_down_hourly_prediction = [[reg_down_prediction[i] for i in hour] for hour in hours]
+reg_down_test = reg_down_test.tolist()
+reg_down_hourly_test = [[reg_down_test[i] for i in hour] for hour in hours]
+for index in range(len(reg_down_hourly_prediction)):
+    print('HOUR', index)
+    for key, value in compute_forecast_metrics(reg_down_hourly_test[index], reg_down_hourly_prediction[index]).items():
+        print(f"{key}: {value}")
+    print()
+'''
+fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3, 2, figsize=(20, 20))
+
+fig.canvas.manager.set_window_title('Throughput Prediction with Snowflake Test')
+
+ax1.plot(date_time_test, reg_up_test, label='actual', color="black", linewidth=1)
+ax1.plot(date_time_test, reg_up_prediction, label='predicted', color="blue", linewidth=3)
+ax1.set_title('REG UP THROUGHPUT ALL')
+ax1.set_xlabel('Date-Time')
+ax1.set_ylabel('Throughput')
+ax1.legend()
+ax1.grid(True)
+
+ax3.plot(date_time_test[-168:], reg_up_test[-168:], label='actual', color="black", linewidth=1)
+ax3.plot(date_time_test[-168:], reg_up_prediction[-168:], label='predicted', color="blue",
+         linewidth=3)
+ax3.set_title('REG UP THROUGHPUT ONE WEEK')
+ax3.set_xlabel('Date-Time')
+ax3.set_ylabel('Throughput')
+ax3.legend()
+ax3.grid(True)
+
+ax5.plot(date_time_test[-24:], reg_up_test[-24:], label='actual', color="black", linewidth=1)
+ax5.plot(date_time_test[-24:], reg_up_prediction[-24:], label='predicted', color="blue",
+         linewidth=3)
+ax5.set_title('REG UP THROUGHPUT ONE DAY')
+ax5.set_xlabel('Date-Time')
+ax5.set_ylabel('Throughput')
+ax5.legend()
+
+ax5.grid(True)
+
+ax2.plot(date_time_test, reg_down_test, label='actual', color="black", linewidth=1)
+ax2.plot(date_time_test, reg_down_prediction, label='predicted', color="blue", linewidth=3)
+ax2.set_title('REG DOWN THROUGHPUT ALL')
+ax2.set_xlabel('Date-Time')
+ax2.set_ylabel('Throughput')
+ax2.legend()
+ax2.grid(True)
+
+ax4.plot(date_time_test[-168:], reg_down_test[-168:], label='actual', color="black", linewidth=1)
+ax4.plot(date_time_test[-168:], reg_down_prediction[-168:], label='predicted', color="blue",
+         linewidth=3)
+ax4.set_title('REG DOWN THROUGHPUT ONE WEEK')
+ax4.set_xlabel('Date-Time')
+ax4.set_ylabel('Throughput')
+ax4.legend()
+ax4.grid(True)
+
+ax6.plot(date_time_test[-24:], reg_down_test[-24:], label='actual', color="black", linewidth=1)
+ax6.plot(date_time_test[-24:], reg_down_prediction[-24:], label='predicted', color="blue",
+         linewidth=3)
+ax6.set_title('REG DOWN THROUGHPUT ONE DAY')
+ax6.set_xlabel('Date-Time')
+ax6.set_ylabel('Throughput')
+ax6.legend()
+ax6.grid(True)
+
+plt.tight_layout()
+plt.show()
