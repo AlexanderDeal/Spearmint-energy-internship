@@ -1,0 +1,193 @@
+import matplotlib.pyplot as plt
+from sklearn import linear_model
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.metrics import (
+    mean_absolute_error,
+    median_absolute_error,
+    mean_absolute_percentage_error,
+    mean_squared_error,
+    r2_score
+)
+from sklearn.feature_selection import SelectKBest, f_regression
+import pandas as pd
+import numpy as np
+
+
+def mae_reduction(y_true, y_pred):
+    median = np.median(y_true)
+    median_mae = mean_absolute_error(y_true, np.repeat([median], len(y_true)))
+    mae = mean_absolute_error(y_true, y_pred)
+    return (median_mae - mae) / median_mae
+
+
+def compute_forecast_metrics(y_true, y_pred):
+    print('Forecast Metrics: ')
+    return {"MSE": mean_squared_error(y_true, y_pred),
+            "MAE": mean_absolute_error(y_true, y_pred),
+            "MAD": median_absolute_error(y_true, y_pred),
+            "R2": r2_score(y_true, y_pred),
+            "MAPE": mean_absolute_percentage_error(y_true, y_pred),
+            "MAER": mae_reduction(y_true, y_pred)}
+
+
+file = pd.read_excel(r"C:\Users\AlexDeal\OneDrive - Spearmint Energy\Documents\reg_throughput_training.xlsx")
+
+date_time = pd.to_datetime(file['DateTime'])
+test_start_index = -1
+month_end_index = -1
+day_end_index = -1
+
+for index, dt in enumerate(date_time):
+    if dt.year == 2024:
+        test_start_index = index
+        break
+
+for index, dt in enumerate(date_time[test_start_index:]):
+    if dt.month == 2:
+        month_end_index = index
+        break
+
+for index, dt in enumerate(date_time[test_start_index:]):
+    if dt.day == 2:
+        day_end_index = index
+        break
+
+date_time_test = date_time[test_start_index:]
+
+temp = file['RU_THROUGHPUT'].to_frame()
+reg_up_train = temp[:test_start_index]
+reg_up_test = temp[test_start_index:]
+
+temp = file['RD_THROUGHPUT'].to_frame()
+reg_down_train = temp[:test_start_index]
+reg_down_test = temp[test_start_index:]
+
+features = ['WZ_FarWest_BIDCLOSE_LOAD_FORECAST', 'WZ_North_BIDCLOSE_LOAD_FORECAST',
+            'WZ_NorthCentral_BIDCLOSE_LOAD_FORECAST',
+            'WZ_West_BIDCLOSE_LOAD_FORECAST', 'ERCOT_SOLAR_STPPF_BIDCLOSE', 'GR_ERCOT_WIND_COPHSL_BIDCLOSE',
+            'GR_WEST_WIND_COPHSL_BIDCLOSE', 'WZ_ERCOT_BIDCLOSE_LOAD_FORECAST', 'temp_austin', 'temp_dallas',
+            'temp_sanantonio', 'NORTH (ERCOT)_TOTAL_RESOURCE_CAP_OUT', 'SOUTH_TOTAL_RESOURCE_CAP_OUT',
+            'WEST (ERCOT)_TOTAL_RESOURCE_CAP_OUT', 'HOUSTON_TOTAL_RESOURCE_CAP_OUT', 'ERCOT_TOTAL_RESOURCE_CAP_OUT',
+            'SYSTEM_LAMBDA_DA', 'hour', 'ercot_net_load', 'ERCOT_SOLAR_STPPF_BIDCLOSE_perc_change',
+            'ercot_wind_fraction',
+            'ercot_renewable_fraction', 'ercot_net_load_perc_change', 'ercot_wind_fraction_perc_change',
+            'ercot_renewable_fraction_perc_change', 'avg_temp', 'dayofweek', 'day_sin', 'day_cos',
+            'max_daily_ercot_net_load', 'max_daily_ercot_net_load_change', 'max_daily_ercot_net_load_perc_change'
+            ]
+
+temp = file[features]
+data_train = temp[:test_start_index]
+data_test = temp[test_start_index:]
+sample_size = 32  # the amount of features to be included in the model, 32 total features
+
+scaler = StandardScaler()
+data_train = scaler.fit_transform(data_train)
+data_test = scaler.transform(data_test)
+
+selector = SelectKBest(score_func=f_regression, k=sample_size)
+data_train = selector.fit_transform(data_train, reg_up_train.values.ravel())
+data_test = selector.transform(data_test)
+selected = selector.get_support(indices=True)
+
+poly = PolynomialFeatures(degree=2)
+poly_features = poly.fit_transform(data_train)
+poly_test = poly.fit_transform(data_test)
+
+regr = linear_model.LinearRegression()
+regr.fit(poly_features, reg_up_train)
+reg_up_prediction = regr.predict(poly_test)
+
+for i in range(len(reg_up_prediction)):  # remove all negative values from the prediction
+    if reg_up_prediction[i][0] < 0:
+        reg_up_prediction[i][0] = 0
+    elif reg_up_prediction[i] > 1:
+        reg_up_prediction[i] = 1
+
+print('REG UP THROUGHPUT:\n')
+print("Weights: ")
+
+for index, i in enumerate(regr.coef_[0]):
+    if index >= sample_size:
+        break
+    print(features[selected[index]], "{:.10f}".format(i))
+print('\nBias:', regr.intercept_[0], '\n')
+for key, value in compute_forecast_metrics(reg_up_test, reg_up_prediction).items():
+    print(f"{key}: {value}")
+print('\n')
+
+regr.fit(poly_features, reg_down_train)
+reg_down_prediction = regr.predict(poly_test)
+
+for i in range(len(reg_down_prediction)):  # remove all negative values from the prediction
+    if reg_down_prediction[i][0] < 0:
+        reg_down_prediction[i][0] = 0
+    elif reg_down_prediction[i] > 1:
+        reg_down_prediction[i] = 1
+
+print('REG DOWN THROUGHPUT:\n')
+print("Weights: ")
+for index, i in enumerate(regr.coef_[0]):
+    if index >= sample_size:
+        break
+    print(features[selected[index]], "{:.10f}".format(i))
+print('\nBias:', regr.intercept_[0], '\n')
+for key, value in compute_forecast_metrics(reg_down_test, reg_down_prediction).items():
+    print(f"{key}: {value}")
+
+fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3, 2, figsize=(20, 20))
+fig.canvas.manager.set_window_title('Throughput Prediction with Original Excel Data')
+
+ax1.plot(date_time_test, reg_up_test, label='actual', color="black", linewidth=1)
+ax1.plot(date_time_test, reg_up_prediction, label='predicted', color="blue", linewidth=3)
+ax1.set_title('REG UP THROUGHPUT')
+ax1.set_xlabel('Date-Time')
+ax1.set_ylabel('Throughput')
+ax1.legend()
+ax1.grid(True)
+
+ax3.plot(date_time_test[:month_end_index], reg_up_test[:month_end_index], label='actual', color="black", linewidth=1)
+ax3.plot(date_time_test[:month_end_index], reg_up_prediction[:month_end_index], label='predicted', color="blue",
+         linewidth=3)
+ax3.set_title('REG UP THROUGHPUT JANUARY 2024')
+ax3.set_xlabel('Date-Time')
+ax3.set_ylabel('Throughput')
+ax3.legend()
+ax3.grid(True)
+
+ax5.plot(date_time_test[:day_end_index], reg_up_test[:day_end_index], label='actual', color="black", linewidth=1)
+ax5.plot(date_time_test[:day_end_index], reg_up_prediction[:day_end_index], label='predicted', color="blue",
+         linewidth=3)
+ax5.set_title('REG UP THROUGHPUT JANUARY 1st 2024')
+ax5.set_xlabel('Date-Time')
+ax5.set_ylabel('Throughput')
+ax5.legend()
+ax5.grid(True)
+
+ax2.plot(date_time_test, reg_down_test, label='actual', color="black", linewidth=1)
+ax2.plot(date_time_test, reg_down_prediction, label='predicted', color="blue", linewidth=3)
+ax2.set_title('REG DOWN THROUGHPUT')
+ax2.set_xlabel('Date-Time')
+ax2.set_ylabel('Throughput')
+ax2.legend()
+ax2.grid(True)
+
+ax4.plot(date_time_test[:month_end_index], reg_down_test[:month_end_index], label='actual', color="black", linewidth=1)
+ax4.plot(date_time_test[:month_end_index], reg_down_prediction[:month_end_index], label='predicted', color="blue",
+         linewidth=3)
+ax4.set_title('REG DOWN THROUGHPUT JANUARY 2024')
+ax4.set_xlabel('Date-Time')
+ax4.set_ylabel('Throughput')
+ax4.legend()
+ax4.grid(True)
+
+ax6.plot(date_time_test[:day_end_index], reg_down_test[:day_end_index], label='actual', color="black", linewidth=1)
+ax6.plot(date_time_test[:day_end_index], reg_down_prediction[:day_end_index], label='predicted', color="blue",
+         linewidth=3)
+ax6.set_title('REG DOWN THROUGHPUT JANUARY 1st 2024')
+ax6.set_xlabel('Date-Time')
+ax6.set_ylabel('Throughput')
+ax6.legend()
+ax6.grid(True)
+
+plt.tight_layout()
+plt.show()
