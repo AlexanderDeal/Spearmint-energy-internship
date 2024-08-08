@@ -1,0 +1,153 @@
+import snowflake.connector
+import pandas as pd
+from math import isnan
+
+conn = snowflake.connector.connect(
+    user='',
+    password='',
+    account='',
+    region='',
+    role='',
+    warehouse=''
+)
+
+# add all the table names datatypeids and objectids to a dataframe
+df = pd.read_sql('''
+            select *
+            from YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL
+            where ISO = 'ERCOT'
+            and lower(SUBCATEGORY) != 'forecast'
+            and year(ENDDATE) = 2024
+            and ACCESS = 'Y'
+            and UNITS != 'BOOL'
+            and DESCRIPTION not like '%60-Day%'
+            and SERIESNAME not in ('RTLMP_BUS', 'DALMP_BUS', 'RTILMP', 'RTLMP', 'DALMP', 'LMP_15MIN', 'ERCOT_DAM_ENERGY_BID_AWARD')
+            and SERIESNAME not like 'ERCOT_INDICATIVE_LMP_INT%'
+            and lower(DESCRIPTION) not like '%lmp%'
+            and lower(DESCRIPTION) not like '%locational marginal%'
+            and SERIESNAME not like '%EIA923_GEN%'
+    ''', conn)
+
+data = {}
+count = 1
+'''
+save the values and datetimes of each item to a dataframe
+save each dataframe to a dictionary and make the key the series name and object name
+ignore any item that sql fails to access
+'''
+for n in range(df.shape[0]):
+    print(df.loc[n, 'SERIESNAME'], count)
+    count += 1
+    try:
+        table_name = 'YESENERGY.YESDATA.' + df.loc[n, 'TABLE_NAME']
+        data[df.loc[n, 'SERIESNAME'], df.loc[n, 'OBJECTNAME']] = pd.read_sql('''
+                select date(DATETIME) as flowdate, hour(DATETIME) as hb, avg(value) as value
+                from ''' + table_name + '''
+                where 1=1
+                and OBJECTID = ''' + str(df.loc[n, 'OBJECTID']) + '''
+                and DATATYPEID = ''' + str(df.loc[n, 'DATATYPEID']) + '''
+                and year(datetime) = 2024
+                group by flowdate, hb
+                order by flowdate asc, hb asc;
+                ''', conn)
+    except:
+        print('Failed')
+
+deployed_reg_up = pd.read_sql('''
+        select date(DATETIME) as ddate, hour(DATETIME) as dhour, avg(VALUE) as avgvalue
+        from YESENERGY.YESDATA.TS_ANCILLARY
+        where DATATYPEID = 7860
+        and year(datetime) = 2024
+        group by ddate, dhour, DATATYPEID
+        order by ddate asc, dhour asc;
+    ''', conn)
+
+deployed_reg_down = pd.read_sql('''
+        select date(DATETIME) as ddate, hour(DATETIME) as dhour, avg(VALUE) as avgvalue
+        from YESENERGY.YESDATA.TS_ANCILLARY
+        where DATATYPEID = 7861
+        and year(datetime) = 2024
+        group by ddate, dhour, DATATYPEID
+        order by ddate asc, dhour asc;
+    ''', conn)
+
+total_reg_up = pd.read_sql('''
+        select date(DATETIME) as ddate, hour(DATETIME) as dhour, avg(VALUE) as avgvalue
+        from YESENERGY.YESDATA.TS_ANCILLARY
+        where DATATYPEID = 7869
+        and year(datetime) = 2024
+        group by ddate, dhour, DATATYPEID
+        order by ddate asc, dhour asc;
+    ''', conn)
+
+total_reg_down = pd.read_sql('''
+        select date(DATETIME) as ddate, hour(DATETIME) as dhour, avg(VALUE) as avgvalue
+        from YESENERGY.YESDATA.TS_ANCILLARY
+        where DATATYPEID = 7870
+        and year(datetime) = 2024
+        group by ddate, dhour, DATATYPEID
+        order by ddate asc, dhour asc;
+    ''', conn)
+
+# divide the reg up deployed by reg up responsibility to get throughput
+reg_up = pd.merge(deployed_reg_up, total_reg_up, on=['DDATE', 'DHOUR'])
+reg_up['VALUE'] = reg_up['AVGVALUE_x'] / reg_up['AVGVALUE_y']
+reg_up = reg_up.drop(columns=['AVGVALUE_x', 'AVGVALUE_y'])
+reg_up.rename(columns={'VALUE': 'REG UP'}, inplace=True)
+
+# divide the reg down deployed by reg down responsibility to get throughput
+reg_down = pd.merge(deployed_reg_down, total_reg_down, on=['DDATE', 'DHOUR'])
+reg_down['VALUE'] = reg_down['AVGVALUE_x'] / reg_down['AVGVALUE_y']
+reg_down = reg_down.drop(columns=['AVGVALUE_x', 'AVGVALUE_y'])
+reg_down.rename(columns={'VALUE': 'REG DOWN'}, inplace=True)
+
+# return reg up and down to DATETIME
+reg_up['DATETIME'] = pd.to_datetime(reg_up['DDATE']) + pd.to_timedelta(reg_up['DHOUR'], unit='h')
+reg_down['DATETIME'] = pd.to_datetime(reg_down['DDATE']) + pd.to_timedelta(reg_down['DHOUR'], unit='h')
+reg_up = reg_up.drop(columns=['DDATE', 'DHOUR'])
+reg_down = reg_down.drop(columns=['DDATE', 'DHOUR'])
+for key, value in data.items():
+    data[key]['DATETIME'] = pd.to_datetime(value['FLOWDATE']) + pd.to_timedelta(value['HB'], unit='h')
+    data[key] = data[key].drop(columns=['FLOWDATE', 'HB'])
+
+# compute the correlations for each item and add them to a dictionary
+# if they meet the appropriate sample size requirement
+sample_size_required = 1000
+reg_up_correlation = {}
+for key, value in data.items():
+    temp = pd.merge(reg_up, value, on=['DATETIME'], how='inner')
+    if temp.shape[0] > sample_size_required:
+        reg_up_correlation[key] = temp['REG UP'].corr(temp['VALUE'])
+
+reg_down_correlation = {}
+for key, value in data.items():
+    temp = pd.merge(reg_down, value, on=['DATETIME'], how='inner')
+    if temp.shape[0] > sample_size_required:
+        reg_down_correlation[key] = temp['REG DOWN'].corr(temp['VALUE'])
+
+# remove any correlations with a nan value
+reg_up_correlation = {k: v for k, v in reg_up_correlation.items() if not isnan(v)}
+reg_down_correlation = {k: v for k, v in reg_down_correlation.items() if not isnan(v)}
+
+# sort the correlations from highest to lowest
+reg_up_correlation = dict(sorted(reg_up_correlation.items(), key=lambda item: item[1], reverse=True))
+reg_down_correlation = dict(sorted(reg_down_correlation.items(), key=lambda item: item[1], reverse=True))
+
+'''
+print('\nREG UP')
+for key, value in reg_up_correlation.items():
+    print(f"{key}: {value}")
+
+print('\nREG DOWN')
+for key, value in reg_down_correlation.items():
+    print(f"{key}: {value}")
+'''
+
+# convert each item in the dictionary into a database and turn it into an excel file
+df = pd.DataFrame(data=reg_up_correlation, index=['REG UP CORRELATIONS'])
+df = df.T
+df.to_excel('reg_up_correlations.xlsx')
+
+df = pd.DataFrame(data=reg_down_correlation, index=['REG DOWN CORRELATIONS'])
+df = df.T
+df.to_excel('reg_down_correlations.xlsx')
