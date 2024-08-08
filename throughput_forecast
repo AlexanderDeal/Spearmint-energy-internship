@@ -1,0 +1,82 @@
+"""
+Run the get_snowflake_data.py file to create a csv
+add the throughput_data_train csv path to the file_train variable
+add the throughput_data_predict csv path to the file_predict variable
+"""
+
+import matplotlib.pyplot as plt
+from sklearn import linear_model
+from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.feature_selection import SelectKBest, f_regression
+import pandas as pd
+
+# add csv paths here
+file_train = pd.read_csv("")
+file_predict = pd.read_csv("")
+
+reg_up = file_train['REG UP']
+reg_down = file_train['REG DOWN']
+features = [
+    'LOAD ERCOT', 'LOAD WEST ERCOT', 'LOAD HOUSTON', 'LOAD SOUTH', 'LOAD NORTH ERCOT',
+    'TEMP H-I', 'TEMP V-A', 'TEMP SA-I', 'TEMP DALLAS', 'TEMP EL PASO', 'TEMP DEL RIO', 'TEMP AMARILLO',
+    'SOLAR ERCOT', 'SOLAR FARWEST', 'SOLAR CENTEREAST', 'SOLAR SOUTHEAST', 'SOLAR FAREAST',
+    'WIND ERCOT', 'WIND WEST', 'WIND NORTH', 'WIND SOUTH', 'WIND COASTAL', 'WIND PANHANDLE',
+    'HOUR', 'DAY OF WEEK', 'WIND FRACTION', 'RENEWABLE FRACTION', 'SOLAR PERCENT CHANGE', 'WIND PERCENT CHANGE',
+]
+data_train = file_train[features]
+data_predict = file_predict[features]
+date_time = file_predict['DATETIME']
+
+scaler = StandardScaler()
+data_train = scaler.fit_transform(data_train)
+data_predict = scaler.transform(data_predict)
+
+sample_size = 30  # the amount of features to be included in the model
+selector = SelectKBest(score_func=f_regression, k=sample_size)
+data_train = selector.fit_transform(data_train, reg_up)
+data_test = selector.transform(data_predict)
+selected = selector.get_support(indices=True)
+
+poly = PolynomialFeatures(degree=2, include_bias=False)
+poly_features = poly.fit_transform(data_train)
+poly_test = poly.fit_transform(data_test)
+regr = linear_model.LinearRegression()
+regr.fit(poly_features, reg_up)
+reg_up_prediction = regr.predict(poly_test)
+
+regr.fit(poly_features, reg_down)
+reg_down_prediction = regr.predict(poly_test)
+
+# Make 0 and 1 the bounds of the prediction
+for i in range(len(reg_up_prediction)):
+    if reg_up_prediction[i] < 0:
+        reg_up_prediction[i] = 0
+    elif reg_up_prediction[i] > 1:
+        reg_up_prediction[i] = 1
+for i in range(len(reg_down_prediction)):
+    if reg_down_prediction[i] < 0:
+        reg_down_prediction[i] = 0
+    elif reg_down_prediction[i] > 1:
+        reg_down_prediction[i] = 1
+
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 20))
+
+fig.canvas.manager.set_window_title('Throughput Prediction with Snowflake Data')
+ax1.tick_params(axis='x', rotation=45)
+ax1.plot(date_time, reg_up_prediction, label='predicted', color="blue", linewidth=3)
+ax1.set_title('REG UP THROUGHPUT FORECAST')
+ax1.set_xlabel('Date-Time')
+ax1.set_ylabel('Throughput')
+ax1.legend()
+ax1.grid(True)
+
+ax2.tick_params(axis='x', rotation=45)
+ax2.plot(date_time, reg_down_prediction, label='predicted', color="blue", linewidth=3)
+ax2.set_title('REG DOWN THROUGHPUT FORECAST')
+ax2.set_xlabel('Date-Time')
+ax2.set_ylabel('Throughput')
+ax2.legend()
+ax2.grid(True)
+
+plt.tight_layout()
+plt.show()
