@@ -1,0 +1,873 @@
+"""
+Run this file to create a csv
+add the csv paths to the throughput_forecast files
+to get the throughput forecast
+"""
+
+import snowflake.connector
+import pandas as pd
+
+# snowflake log in credential
+conn = snowflake.connector.connect(
+    user='',
+    password='',
+    account='',
+    region='',
+    role='',
+    warehouse=''
+)
+cur = conn.cursor()
+deployed_reg_up = pd.read_sql('''
+        select date(DATETIME) as ddate, hour(DATETIME) as dhour, avg(VALUE) as avgvalue
+        from YESENERGY.YESDATA.TS_ANCILLARY
+        where DATATYPEID = 7860
+        and DATETIME > '2022-01-01'
+        group by ddate, dhour, DATATYPEID
+        order by ddate asc, dhour asc;
+    ''', conn)
+deployed_reg_down = pd.read_sql('''
+        select date(DATETIME) as ddate, hour(DATETIME) as dhour, avg(VALUE) as avgvalue
+        from YESENERGY.YESDATA.TS_ANCILLARY
+        where DATATYPEID = 7861
+        and DATETIME > '2022-01-01'
+        group by ddate, dhour, DATATYPEID
+        order by ddate asc, dhour asc;
+    ''', conn)
+
+total_reg_up = pd.read_sql('''
+        select date(DATETIME) as ddate, hour(DATETIME) as dhour, avg(VALUE) as avgvalue
+        from YESENERGY.YESDATA.TS_ANCILLARY
+        where DATATYPEID = 7869
+        and DATETIME > '2022-01-01'
+        group by ddate, dhour, DATATYPEID
+        order by ddate asc, dhour asc;
+    ''', conn)
+total_reg_down = pd.read_sql('''
+        select date(DATETIME) as ddate, hour(DATETIME) as dhour, avg(VALUE) as avgvalue
+        from YESENERGY.YESDATA.TS_ANCILLARY
+        where DATATYPEID = 7870
+        and DATETIME > '2022-01-01'
+        group by ddate, dhour, DATATYPEID
+        order by ddate asc, dhour asc;
+    ''', conn)
+
+wind_forecast_ERCOT = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_FORECAST as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 9285
+        and f.PUBLISHDATE = (select max(PUBLISHDATE) from YESENERGY.YESDATA.TS_FORECAST where DATATYPEID = 9285)
+        and c.SERIESNAME = 'WIND_STWPF'
+        and OBJECTNAME = 'GR_ERCOT'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME asc;
+    ''', conn)
+
+wind_actual_ercot = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_GEN as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 9067
+        and OBJECTNAME = 'ERCOT'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME asc;
+    ''', conn)
+
+wind_forecast_west = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_FORECAST as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 9285
+        and f.PUBLISHDATE = (select max(PUBLISHDATE) from YESENERGY.YESDATA.TS_FORECAST where DATATYPEID = 9285)
+        and c.SERIESNAME = 'WIND_STWPF'
+        and OBJECTNAME = 'GR_WEST'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME asc;
+    ''', conn)
+
+wind_actual_west = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_GEN as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 9067
+        and DATETIME > '2022-01-01'
+        and OBJECTNAME = 'GR_WEST'
+        order by f.DATETIME asc;
+    ''', conn)
+
+wind_forecast_north = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_FORECAST as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 9285
+        and f.PUBLISHDATE = (select max(PUBLISHDATE) from YESENERGY.YESDATA.TS_FORECAST where DATATYPEID = 9285)
+        and c.SERIESNAME = 'WIND_STWPF'
+        and OBJECTNAME = 'GR_NORTH'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME asc;
+    ''', conn)
+
+wind_actual_north = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_GEN as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 9067
+        and DATETIME > '2022-01-01'
+        and OBJECTNAME = 'GR_NORTH'
+        order by f.DATETIME asc;
+    ''', conn)
+
+wind_forecast_south = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_FORECAST as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 9285
+        and f.PUBLISHDATE = (select max(PUBLISHDATE) from YESENERGY.YESDATA.TS_FORECAST where DATATYPEID = 9285)
+        and c.SERIESNAME = 'WIND_STWPF'
+        and OBJECTNAME = 'GR_SOUTH'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME asc;
+    ''', conn)
+
+wind_actual_south = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_GEN as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 9067
+        and DATETIME > '2022-01-01'
+        and OBJECTNAME = 'GR_SOUTH'
+        order by f.DATETIME asc;
+    ''', conn)
+
+wind_forecast_coastal = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_FORECAST as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 9285
+        and f.PUBLISHDATE = (select max(PUBLISHDATE) from YESENERGY.YESDATA.TS_FORECAST where DATATYPEID = 9285)
+        and c.SERIESNAME = 'WIND_STWPF'
+        and OBJECTNAME = 'GR_COASTAL'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME asc;
+    ''', conn)
+
+wind_actual_coastal = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_GEN as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 9067
+        and DATETIME > '2022-01-01'
+        and OBJECTNAME = 'GR_COASTAL'
+        order by f.DATETIME asc;
+    ''', conn)
+
+wind_forecast_panhandle = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_FORECAST as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 9285
+        and f.PUBLISHDATE = (select max(PUBLISHDATE) from YESENERGY.YESDATA.TS_FORECAST where DATATYPEID = 9285)
+        and c.SERIESNAME = 'WIND_STWPF'
+        and OBJECTNAME = 'GR_PANHANDLE'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME asc;
+    ''', conn)
+
+wind_actual_panhandle = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_GEN as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 9067
+        and DATETIME > '2022-01-01'
+        and OBJECTNAME = 'GR_PANHANDLE'
+        order by f.DATETIME asc;
+    ''', conn)
+
+solar_forecast_ERCOT = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_FORECAST as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 662
+        and OBJECTNAME = 'ERCOT'
+        and DATETIME > '2022-01-01'
+        and f.PUBLISHDATE = (select max(PUBLISHDATE) from YESENERGY.YESDATA.TS_FORECAST where DATATYPEID = 662)
+        order by f.DATETIME asc;
+    ''', conn)
+
+solar_actual_ercot = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_GEN as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 660
+        and OBJECTNAME = 'ERCOT'
+        and SHORTNAME = 'GenSolRT'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME asc;
+    ''', conn)
+
+solar_forecast_farwest = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_FORECAST as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 662
+        and OBJECTNAME = 'FarWest'
+        and DATETIME > '2022-01-01'
+        and f.PUBLISHDATE = (select max(PUBLISHDATE) from YESENERGY.YESDATA.TS_FORECAST where DATATYPEID = 662)
+        order by f.DATETIME asc;
+    ''', conn)
+
+solar_actual_farwest = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_GEN as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 660
+        and OBJECTNAME = 'FarWest'
+        and SHORTNAME = 'GenSolRT'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME asc;
+    ''', conn)
+
+solar_forecast_centereast = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_FORECAST as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 662
+        and OBJECTNAME = 'CenterEast'
+        and DATETIME > '2022-01-01'
+        and f.PUBLISHDATE = (select max(PUBLISHDATE) from YESENERGY.YESDATA.TS_FORECAST where DATATYPEID = 662)
+        order by f.DATETIME asc;
+    ''', conn)
+
+solar_actual_centereast = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_GEN as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 660
+        and OBJECTNAME = 'CenterEast'
+        and SHORTNAME = 'GenSolRT'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME asc;
+    ''', conn)
+
+solar_forecast_southeast = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_FORECAST as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 662
+        and OBJECTNAME = 'SouthEast'
+        and DATETIME > '2022-01-01'
+        and f.PUBLISHDATE = (select max(PUBLISHDATE) from YESENERGY.YESDATA.TS_FORECAST where DATATYPEID = 662)
+        order by f.DATETIME asc;
+    ''', conn)
+
+solar_actual_southeast = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_GEN as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 660
+        and OBJECTNAME = 'SouthEast'
+        and SHORTNAME = 'GenSolRT'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME asc;
+    ''', conn)
+
+solar_forecast_fareast = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_FORECAST as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 662
+        and OBJECTNAME = 'FarEast'
+        and DATETIME > '2022-01-01'
+        and f.PUBLISHDATE = (select max(PUBLISHDATE) from YESENERGY.YESDATA.TS_FORECAST where DATATYPEID = 662)
+        order by f.DATETIME asc;
+    ''', conn)
+
+solar_actual_fareast = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_GEN as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 660
+        and OBJECTNAME = 'FarEast'
+        and SHORTNAME = 'GenSolRT'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME asc;
+    ''', conn)
+
+load_ercot_forecast = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_FORECAST as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 19060
+        and f.PUBLISHDATE = (select max(PUBLISHDATE) from YESENERGY.YESDATA.TS_FORECAST where DATATYPEID = 19060)
+        and c.SERIESNAME like '%LOAD_FORECAST_TOMORROW%'
+        and c.OBJECTNAME = 'ERCOT'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME asc;
+    ''', conn)
+
+load_ercot_actual = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_LOAD as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 1137
+        and c.OBJECTNAME = 'ERCOT'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME asc;
+    ''', conn)
+
+load_west_ercot_forecast = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_FORECAST as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 19060
+        and f.PUBLISHDATE = (select max(PUBLISHDATE) from YESENERGY.YESDATA.TS_FORECAST where DATATYPEID = 19060)
+        and c.SERIESNAME like '%LOAD_FORECAST_TOMORROW%'
+        and c.OBJECTNAME = 'WEST (ERCOT)'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME desc, f.OBJECTID desc;
+    ''', conn)
+
+load_west_ercot_actual = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_LOAD as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 1137
+        and c.OBJECTNAME = 'WEST (ERCOT)'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME desc, f.OBJECTID desc;
+    ''', conn)
+
+load_houston_forecast = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_FORECAST as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 19060
+        and f.PUBLISHDATE = (select max(PUBLISHDATE) from YESENERGY.YESDATA.TS_FORECAST where DATATYPEID = 19060)
+        and c.SERIESNAME like '%LOAD_FORECAST_TOMORROW%'
+        and c.OBJECTNAME = 'HOUSTON'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME desc, f.OBJECTID desc;
+    ''', conn)
+
+load_houston_actual = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_LOAD as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 1137
+        and DATETIME > '2022-01-01'
+        and c.OBJECTNAME = 'HOUSTON'
+        order by f.DATETIME desc, f.OBJECTID desc;
+    ''', conn)
+
+load_south_forecast = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_FORECAST as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 19060
+        and f.PUBLISHDATE = (select max(PUBLISHDATE) from YESENERGY.YESDATA.TS_FORECAST where DATATYPEID = 19060)
+        and c.SERIESNAME like '%LOAD_FORECAST_TOMORROW%'
+        and c.OBJECTNAME = 'SOUTH'
+        order by f.DATETIME desc, f.OBJECTID desc;
+    ''', conn)
+
+load_south_actual = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_LOAD as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 1137
+        and c.OBJECTNAME = 'SOUTH'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME desc, f.OBJECTID desc;
+    ''', conn)
+
+load_north_ercot_forecast = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_FORECAST as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 19060
+        and f.PUBLISHDATE = (select max(PUBLISHDATE) from YESENERGY.YESDATA.TS_FORECAST where DATATYPEID = 19060)
+        and c.SERIESNAME like '%LOAD_FORECAST_TOMORROW%'
+        and c.OBJECTNAME = 'NORTH (ERCOT)'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME desc, f.OBJECTID desc;
+    ''', conn)
+
+load_north_ercot_actual = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_LOAD as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 1137
+        and DATETIME > '2022-01-01'
+        and c.OBJECTNAME = 'NORTH (ERCOT)'
+        order by f.DATETIME desc, f.OBJECTID desc;
+    ''', conn)
+
+temp_forecast_houston_inter = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_NWS_FC_TEMP_V as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 10777
+        and DATETIME > '2022-01-01'
+        and OBJECTNAME = 'TX - Houston/Intercontinental'
+        order by f.DATETIME asc;
+    ''', conn)
+
+temp_actual_houston_inter = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_ALLWX_V as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 10782
+        and DATETIME > '2017-01-01'
+        and OBJECTNAME = 'TX - Houston/Intercontinental'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME asc;
+    ''', conn)
+
+temp_forecast_vic = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_NWS_FC_TEMP_V as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 10777
+        and DATETIME > '2022-01-01'
+        and OBJECTNAME = 'TX - Victoria/Regional Airport'
+        order by f.DATETIME asc, f.OBJECTID asc;
+    ''', conn)
+
+temp_actual_vic = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_ALLWX_V as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 10782
+        and OBJECTNAME = 'TX - Victoria/Regional Airport'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME asc, f.OBJECTID asc;
+    ''', conn)
+
+temp_forecast_SA = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_NWS_FC_TEMP_V as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 10777
+        and DATETIME > '2022-01-01'
+        and OBJECTNAME = 'TX - San Antonio/Intl'
+        order by f.DATETIME asc, f.OBJECTID asc;
+    ''', conn)
+
+temp_actual_SA = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_ALLWX_V as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 10782
+        and OBJECTNAME = 'TX - San Antonio/Intl'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME asc, f.OBJECTID asc;
+    ''', conn)
+
+temp_forecast_dallas_fw = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_NWS_FC_TEMP_V as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 10777
+        and DATETIME > '2022-01-01'
+        and OBJECTNAME = 'TX - Dallas-Fort Worth/Intl'
+        order by f.DATETIME asc, f.OBJECTID asc;
+    ''', conn)
+
+temp_actual_dallas_fw = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_ALLWX_V as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 10782
+        and OBJECTNAME = 'TX - Dallas-Fort Worth/Intl'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME asc, f.OBJECTID asc;
+    ''', conn)
+
+temp_forecast_el_paso = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_NWS_FC_TEMP_V as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 10777
+        and DATETIME > '2022-01-01'
+        and OBJECTNAME = 'TX - El Paso/Intl'
+        order by f.DATETIME asc, f.OBJECTID asc;
+    ''', conn)
+
+temp_actual_el_paso = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_ALLWX_V as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 10782
+        and OBJECTNAME = 'TX - El Paso/Intl'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME asc, f.OBJECTID asc;
+    ''', conn)
+
+temp_forecast_del_rio = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_NWS_FC_TEMP_V as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 10777
+        and DATETIME > '2022-01-01'
+        and OBJECTNAME = 'TX - Del Rio/Intl'
+        order by f.DATETIME asc, f.OBJECTID asc;
+    ''', conn)
+
+temp_actual_del_rio = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_ALLWX_V as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 10782
+        and OBJECTNAME = 'TX - Del Rio/Intl'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME asc, f.OBJECTID asc;
+    ''', conn)
+
+temp_forecast_amarillo = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_NWS_FC_TEMP_V as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 10777
+        and DATETIME > '2022-01-01'
+        and OBJECTNAME = 'TX - Amarillo/Intl'
+        order by f.DATETIME asc, f.OBJECTID asc;
+    ''', conn)
+
+temp_actual_amarillo = pd.read_sql('''
+        select VALUE, DATETIME
+        from YESENERGY.YESDATA.TS_ALLWX_V as f
+        left join YESENERGY.YESCOMMON.V_DATA_CATALOG_DETAIL as c
+        on (f.DATATYPEID = c.DATATYPEID) and (f.OBJECTID = c.OBJECTID)
+        where f.DATATYPEID = 10782
+        and OBJECTNAME = 'TX - Amarillo/Intl'
+        and DATETIME > '2022-01-01'
+        order by f.DATETIME asc, f.OBJECTID asc;
+    ''', conn)
+
+ERCOT_FUELMIX_RT_PWERSTOR_HSL = pd.read_sql('''
+        select date(DATETIME) as ddate, hour(DATETIME) as dhour, avg(VALUE) as avgvalue
+        from YESENERGY.YESDATA.TS_GEN
+        where DATATYPEID = 2518
+        and OBJECTID = 10000756298
+        and DATETIME > '2022-01-01'
+        group by ddate, dhour, DATATYPEID
+        order by ddate asc, dhour asc;
+    ''', conn)
+
+ERCOT_FUELMIX_RT_PWERSTOR_GEN = pd.read_sql('''
+        select date(DATETIME) as ddate, hour(DATETIME) as dhour, avg(VALUE) as avgvalue
+        from YESENERGY.YESDATA.TS_GEN
+        where DATATYPEID = 2518
+        and OBJECTID = 10000756298
+        and DATETIME > '2022-01-01'
+        group by ddate, dhour, DATATYPEID
+        order by ddate asc, dhour asc;
+    ''', conn)
+
+SCED_LAVACA = pd.read_sql('''
+        select date(DATETIME) as ddate, hour(DATETIME) as dhour, avg(VALUE) as avgvalue
+        from YESENERGY.YESDATA.TS_GEN
+        where DATATYPEID = 99698
+        and OBJECTID = 10017098287
+        and DATETIME > '2022-01-01'
+        group by ddate, dhour, DATATYPEID
+        order by ddate asc, dhour asc;
+    ''', conn)
+
+SCED_CHISHOLM = pd.read_sql('''
+        select date(DATETIME) as ddate, hour(DATETIME) as dhour, avg(VALUE) as avgvalue
+        from YESENERGY.YESDATA.TS_GEN
+        where DATATYPEID = 99698
+        and OBJECTID = 10016755161
+        and DATETIME > '2022-01-01'
+        group by ddate, dhour, DATATYPEID
+        order by ddate asc, dhour asc;
+    ''', conn)
+
+# Real-time coal & lignite generation from the ERCOT fuel mix dashboard.
+ERCOT_FUELMIX_RT_COALLIG_GEN = pd.read_sql('''
+        select date(DATETIME) as ddate, hour(DATETIME) as dhour, avg(VALUE) as avgvalue
+        from YESENERGY.YESDATA.TS_GEN
+        where DATATYPEID = 2487
+        and OBJECTID = 10000756298
+        and DATETIME > '2022-01-01'
+        group by ddate, dhour, DATATYPEID
+        order by ddate asc, dhour asc;
+    ''', conn)
+
+# divide the reg up deployed by reg up responsibility
+reg_up = pd.merge(deployed_reg_up, total_reg_up, on=['DDATE', 'DHOUR'])
+reg_up['VALUE'] = reg_up['AVGVALUE_x'] / reg_up['AVGVALUE_y']
+reg_up = reg_up.drop(columns=['AVGVALUE_x', 'AVGVALUE_y'])
+reg_up.rename(columns={'VALUE': 'REG UP'}, inplace=True)
+
+# divide the reg down deployed by reg down responsibility
+reg_down = pd.merge(deployed_reg_down, total_reg_down, on=['DDATE', 'DHOUR'])
+reg_down['VALUE'] = reg_down['AVGVALUE_x'] / reg_down['AVGVALUE_y']
+reg_down = reg_down.drop(columns=['AVGVALUE_x', 'AVGVALUE_y'])
+reg_down.rename(columns={'VALUE': 'REG DOWN'}, inplace=True)
+
+# return reg up and reg down to datetime format
+reg_up['DATETIME'] = pd.to_datetime(reg_up['DDATE']) + pd.to_timedelta(reg_up['DHOUR'], unit='h')
+reg_down['DATETIME'] = pd.to_datetime(reg_down['DDATE']) + pd.to_timedelta(reg_down['DHOUR'], unit='h')
+reg_up = reg_up.drop(columns=['DDATE', 'DHOUR'])
+reg_down = reg_down.drop(columns=['DDATE', 'DHOUR'])
+
+SCED_LAVACA['DATETIME'] = pd.to_datetime(SCED_LAVACA['DDATE']) + pd.to_timedelta(SCED_LAVACA['DHOUR'], unit='h')
+SCED_LAVACA = SCED_LAVACA.drop(columns=['DDATE', 'DHOUR'])
+SCED_CHISHOLM['DATETIME'] = pd.to_datetime(SCED_CHISHOLM['DDATE']) + pd.to_timedelta(SCED_CHISHOLM['DHOUR'], unit='h')
+SCED_CHISHOLM = SCED_CHISHOLM.drop(columns=['DDATE', 'DHOUR'])
+
+ERCOT_FUELMIX_RT_PWERSTOR_HSL['DATETIME'] = pd.to_datetime(ERCOT_FUELMIX_RT_PWERSTOR_HSL['DDATE']) + pd.to_timedelta(
+    ERCOT_FUELMIX_RT_PWERSTOR_HSL['DHOUR'], unit='h')
+ERCOT_FUELMIX_RT_PWERSTOR_HSL = ERCOT_FUELMIX_RT_PWERSTOR_HSL.drop(columns=['DDATE', 'DHOUR'])
+ERCOT_FUELMIX_RT_PWERSTOR_GEN['DATETIME'] = pd.to_datetime(ERCOT_FUELMIX_RT_PWERSTOR_GEN['DDATE']) + pd.to_timedelta(
+    ERCOT_FUELMIX_RT_PWERSTOR_GEN['DHOUR'], unit='h')
+ERCOT_FUELMIX_RT_PWERSTOR_GEN = ERCOT_FUELMIX_RT_PWERSTOR_GEN.drop(columns=['DDATE', 'DHOUR'])
+ERCOT_FUELMIX_RT_COALLIG_GEN['DATETIME'] = pd.to_datetime(ERCOT_FUELMIX_RT_COALLIG_GEN['DDATE']) + pd.to_timedelta(
+    ERCOT_FUELMIX_RT_COALLIG_GEN['DHOUR'], unit='h')
+ERCOT_FUELMIX_RT_COALLIG_GEN = ERCOT_FUELMIX_RT_COALLIG_GEN.drop(columns=['DDATE', 'DHOUR'])
+
+# some temperature entries are NA, this makes them the average of the previous and next entries
+forward_fill = temp_actual_houston_inter['VALUE'].ffill()
+backward_fill = temp_actual_houston_inter['VALUE'].bfill()
+average_fill = (forward_fill + backward_fill) / 2
+temp_actual_houston_inter['VALUE'] = temp_actual_houston_inter['VALUE'].combine_first(average_fill)
+
+forward_fill = temp_actual_vic['VALUE'].ffill()
+backward_fill = temp_actual_vic['VALUE'].bfill()
+average_fill = (forward_fill + backward_fill) / 2
+temp_actual_vic['VALUE'] = temp_actual_vic['VALUE'].combine_first(average_fill)
+
+forward_fill = temp_actual_SA['VALUE'].ffill()
+backward_fill = temp_actual_SA['VALUE'].bfill()
+average_fill = (forward_fill + backward_fill) / 2
+temp_actual_SA['VALUE'] = temp_actual_SA['VALUE'].combine_first(average_fill)
+
+forward_fill = temp_actual_dallas_fw['VALUE'].ffill()
+backward_fill = temp_actual_dallas_fw['VALUE'].bfill()
+average_fill = (forward_fill + backward_fill) / 2
+temp_actual_dallas_fw['VALUE'] = temp_actual_dallas_fw['VALUE'].combine_first(average_fill)
+
+forward_fill = temp_actual_el_paso['VALUE'].ffill()
+backward_fill = temp_actual_el_paso['VALUE'].bfill()
+average_fill = (forward_fill + backward_fill) / 2
+temp_actual_el_paso['VALUE'] = temp_actual_el_paso['VALUE'].combine_first(average_fill)
+
+forward_fill = temp_actual_dallas_fw['VALUE'].ffill()
+backward_fill = temp_actual_dallas_fw['VALUE'].bfill()
+average_fill = (forward_fill + backward_fill) / 2
+temp_actual_dallas_fw['VALUE'] = temp_actual_dallas_fw['VALUE'].combine_first(average_fill)
+
+forward_fill = temp_actual_el_paso['VALUE'].ffill()
+backward_fill = temp_actual_el_paso['VALUE'].bfill()
+average_fill = (forward_fill + backward_fill) / 2
+temp_actual_el_paso['VALUE'] = temp_actual_el_paso['VALUE'].combine_first(average_fill)
+
+forward_fill = temp_actual_del_rio['VALUE'].ffill()
+backward_fill = temp_actual_del_rio['VALUE'].bfill()
+average_fill = (forward_fill + backward_fill) / 2
+temp_actual_del_rio['VALUE'] = temp_actual_del_rio['VALUE'].combine_first(average_fill)
+
+forward_fill = temp_actual_amarillo['VALUE'].ffill()
+backward_fill = temp_actual_amarillo['VALUE'].bfill()
+average_fill = (forward_fill + backward_fill) / 2
+temp_actual_amarillo['VALUE'] = temp_actual_amarillo['VALUE'].combine_first(average_fill)
+
+# add all prediction data to a single dataframe
+# this removes any date-times that aren't shared
+data_predict = pd.merge(solar_forecast_ERCOT, wind_forecast_ERCOT, on=['DATETIME'], how='inner',
+                        suffixes=('1', '2'))
+data_predict.rename(columns={'VALUE1': 'SOLAR ERCOT'}, inplace=True)
+data_predict.rename(columns={'VALUE2': 'WIND ERCOT'}, inplace=True)
+
+data_predict = pd.merge(data_predict, wind_forecast_west, on=['DATETIME'], how='inner')
+data_predict.rename(columns={'VALUE': 'WIND WEST'}, inplace=True)
+data_predict = pd.merge(data_predict, wind_forecast_south, on=['DATETIME'], how='inner')
+data_predict.rename(columns={'VALUE': 'WIND SOUTH'}, inplace=True)
+data_predict = pd.merge(data_predict, wind_forecast_coastal, on=['DATETIME'], how='inner')
+data_predict.rename(columns={'VALUE': 'WIND COASTAL'}, inplace=True)
+data_predict = pd.merge(data_predict, wind_forecast_panhandle, on=['DATETIME'], how='inner')
+data_predict.rename(columns={'VALUE': 'WIND PANHANDLE'}, inplace=True)
+data_predict = pd.merge(data_predict, wind_forecast_north, on=['DATETIME'], how='inner')
+data_predict.rename(columns={'VALUE': 'WIND NORTH'}, inplace=True)
+
+data_predict = pd.merge(data_predict, solar_forecast_farwest, on=['DATETIME'], how='inner')
+data_predict.rename(columns={'VALUE': 'SOLAR FARWEST'}, inplace=True)
+data_predict = pd.merge(data_predict, solar_forecast_centereast, on=['DATETIME'], how='inner')
+data_predict.rename(columns={'VALUE': 'SOLAR CENTEREAST'}, inplace=True)
+data_predict = pd.merge(data_predict, solar_forecast_southeast, on=['DATETIME'], how='inner')
+data_predict.rename(columns={'VALUE': 'SOLAR SOUTHEAST'}, inplace=True)
+data_predict = pd.merge(data_predict, solar_forecast_fareast, on=['DATETIME'], how='inner')
+data_predict.rename(columns={'VALUE': 'SOLAR FAREAST'}, inplace=True)
+
+data_predict = pd.merge(data_predict, load_ercot_forecast, on=['DATETIME'], how='inner')
+data_predict.rename(columns={'VALUE': 'LOAD ERCOT'}, inplace=True)
+data_predict = pd.merge(data_predict, load_west_ercot_forecast, on=['DATETIME'], how='inner')
+data_predict.rename(columns={'VALUE': 'LOAD WEST ERCOT'}, inplace=True)
+data_predict = pd.merge(data_predict, load_houston_forecast, on=['DATETIME'], how='inner')
+data_predict.rename(columns={'VALUE': 'LOAD HOUSTON'}, inplace=True)
+data_predict = pd.merge(data_predict, load_south_forecast, on=['DATETIME'], how='inner')
+data_predict.rename(columns={'VALUE': 'LOAD SOUTH'}, inplace=True)
+data_predict = pd.merge(data_predict, load_north_ercot_forecast, on=['DATETIME'], how='inner')
+data_predict.rename(columns={'VALUE': 'LOAD NORTH ERCOT'}, inplace=True)
+
+data_predict = pd.merge(data_predict, temp_forecast_houston_inter, on=['DATETIME'], how='inner')
+data_predict.rename(columns={'VALUE': 'TEMP H-I'}, inplace=True)
+data_predict = pd.merge(data_predict, temp_forecast_vic, on=['DATETIME'], how='inner')
+data_predict.rename(columns={'VALUE': 'TEMP V-A'}, inplace=True)
+data_predict = pd.merge(data_predict, temp_forecast_SA, on=['DATETIME'], how='inner')
+data_predict.rename(columns={'VALUE': 'TEMP SA-I'}, inplace=True)
+data_predict = pd.merge(data_predict, temp_forecast_dallas_fw, on=['DATETIME'], how='inner')
+data_predict.rename(columns={'VALUE': 'TEMP DALLAS'}, inplace=True)
+data_predict = pd.merge(data_predict, temp_forecast_el_paso, on=['DATETIME'], how='inner')
+data_predict.rename(columns={'VALUE': 'TEMP EL PASO'}, inplace=True)
+data_predict = pd.merge(data_predict, temp_forecast_del_rio, on=['DATETIME'], how='inner')
+data_predict.rename(columns={'VALUE': 'TEMP DEL RIO'}, inplace=True)
+data_predict = pd.merge(data_predict, temp_forecast_amarillo, on=['DATETIME'], how='inner')
+data_predict.rename(columns={'VALUE': 'TEMP AMARILLO'}, inplace=True)
+
+# add all training data to a single dataframe
+data_train = pd.merge(solar_actual_ercot, wind_actual_ercot, on=['DATETIME'], how='inner', suffixes=('1', '2'))
+data_train.rename(columns={'VALUE1': 'SOLAR ERCOT'}, inplace=True)
+data_train.rename(columns={'VALUE2': 'WIND ERCOT'}, inplace=True)
+
+data_train = pd.merge(data_train, wind_actual_west, on=['DATETIME'], how='inner')
+data_train.rename(columns={'VALUE': 'WIND WEST'}, inplace=True)
+data_train = pd.merge(data_train, wind_actual_north, on=['DATETIME'], how='inner')
+data_train.rename(columns={'VALUE': 'WIND NORTH'}, inplace=True)
+data_train = pd.merge(data_train, wind_actual_south, on=['DATETIME'], how='inner')
+data_train.rename(columns={'VALUE': 'WIND SOUTH'}, inplace=True)
+data_train = pd.merge(data_train, wind_actual_coastal, on=['DATETIME'], how='inner')
+data_train.rename(columns={'VALUE': 'WIND COASTAL'}, inplace=True)
+data_train = pd.merge(data_train, wind_actual_panhandle, on=['DATETIME'], how='inner')
+data_train.rename(columns={'VALUE': 'WIND PANHANDLE'}, inplace=True)
+
+data_train = pd.merge(data_train, solar_actual_farwest, on=['DATETIME'], how='inner')
+data_train.rename(columns={'VALUE': 'SOLAR FARWEST'}, inplace=True)
+data_train = pd.merge(data_train, solar_actual_centereast, on=['DATETIME'], how='inner')
+data_train.rename(columns={'VALUE': 'SOLAR CENTEREAST'}, inplace=True)
+data_train = pd.merge(data_train, solar_actual_southeast, on=['DATETIME'], how='inner')
+data_train.rename(columns={'VALUE': 'SOLAR SOUTHEAST'}, inplace=True)
+data_train = pd.merge(data_train, solar_actual_fareast, on=['DATETIME'], how='inner')
+data_train.rename(columns={'VALUE': 'SOLAR FAREAST'}, inplace=True)
+
+data_train = pd.merge(data_train, load_ercot_actual, on=['DATETIME'], how='inner')
+data_train.rename(columns={'VALUE': 'LOAD ERCOT'}, inplace=True)
+data_train = pd.merge(data_train, load_west_ercot_actual, on=['DATETIME'], how='inner')
+data_train.rename(columns={'VALUE': 'LOAD WEST ERCOT'}, inplace=True)
+data_train = pd.merge(data_train, load_houston_actual, on=['DATETIME'], how='inner')
+data_train.rename(columns={'VALUE': 'LOAD HOUSTON'}, inplace=True)
+data_train = pd.merge(data_train, load_south_actual, on=['DATETIME'], how='inner')
+data_train.rename(columns={'VALUE': 'LOAD SOUTH'}, inplace=True)
+data_train = pd.merge(data_train, load_north_ercot_actual, on=['DATETIME'], how='inner')
+data_train.rename(columns={'VALUE': 'LOAD NORTH ERCOT'}, inplace=True)
+
+data_train = pd.merge(data_train, temp_actual_houston_inter, on=['DATETIME'], how='inner')
+data_train.rename(columns={'VALUE': 'TEMP H-I'}, inplace=True)
+data_train = pd.merge(data_train, temp_actual_vic, on=['DATETIME'], how='inner')
+data_train.rename(columns={'VALUE': 'TEMP V-A'}, inplace=True)
+data_train = pd.merge(data_train, temp_actual_SA, on=['DATETIME'], how='inner')
+data_train.rename(columns={'VALUE': 'TEMP SA-I'}, inplace=True)
+data_train = pd.merge(data_train, temp_actual_dallas_fw, on=['DATETIME'], how='inner')
+data_train.rename(columns={'VALUE': 'TEMP DALLAS'}, inplace=True)
+data_train = pd.merge(data_train, temp_actual_el_paso, on=['DATETIME'], how='inner')
+data_train.rename(columns={'VALUE': 'TEMP EL PASO'}, inplace=True)
+data_train = pd.merge(data_train, temp_actual_del_rio, on=['DATETIME'], how='inner')
+data_train.rename(columns={'VALUE': 'TEMP DEL RIO'}, inplace=True)
+data_train = pd.merge(data_train, temp_actual_amarillo, on=['DATETIME'], how='inner')
+data_train.rename(columns={'VALUE': 'TEMP AMARILLO'}, inplace=True)
+
+data_train = pd.merge(data_train, SCED_LAVACA, on=['DATETIME'], how='inner')
+data_train.rename(columns={'AVGVALUE': 'SCED RAW GEN LAVACA'}, inplace=True)
+data_train = pd.merge(data_train, SCED_CHISHOLM, on=['DATETIME'], how='inner')
+data_train.rename(columns={'AVGVALUE': 'SCED RAW GEN CHISHOM GRID ENERGY STORAGE SYSTEM'}, inplace=True)
+
+data_train = pd.merge(data_train, ERCOT_FUELMIX_RT_PWERSTOR_HSL, on=['DATETIME'], how='inner')
+data_train.rename(columns={'AVGVALUE': 'ERCOT FUELMIX RT PWERSTOR HSL'}, inplace=True)
+data_train = pd.merge(data_train, ERCOT_FUELMIX_RT_PWERSTOR_GEN, on=['DATETIME'], how='inner')
+data_train.rename(columns={'AVGVALUE': 'ERCOT FUELMIX RT PWERSTOR GEN'}, inplace=True)
+data_train = pd.merge(data_train, ERCOT_FUELMIX_RT_COALLIG_GEN, on=['DATETIME'], how='inner')
+data_train.rename(columns={'AVGVALUE': 'ERCOT FUELMIX RT COALLIG GEN'}, inplace=True)
+
+data_train = data_train.drop_duplicates(subset='DATETIME')
+
+date_time_predict = pd.DataFrame()
+date_time_train = pd.DataFrame()
+date_time_predict['DATETIME PREDICT'] = data_predict['DATETIME']
+date_time_train['DATETIME TRAIN'] = data_train['DATETIME']
+
+all_train_data = pd.merge(reg_up, data_train, on=['DATETIME'], how='inner')
+all_train_data = pd.merge(reg_down, all_train_data, on=['DATETIME'], how='inner')
+all_train_data['HOUR'] = all_train_data['DATETIME'].dt.hour
+all_train_data['DAY OF WEEK'] = all_train_data['DATETIME'].dt.dayofweek
+all_train_data['WIND FRACTION'] = all_train_data['WIND ERCOT'] / all_train_data['LOAD ERCOT']
+all_train_data['RENEWABLE FRACTION'] = ((all_train_data['SOLAR ERCOT'] + all_train_data['WIND ERCOT']) /
+                                        all_train_data['LOAD ERCOT'])
+all_train_data['SOLAR PERCENT CHANGE'] = (2 * (all_train_data['SOLAR ERCOT'] - all_train_data['SOLAR ERCOT'].shift(1)) /
+                                          (all_train_data['SOLAR ERCOT'] + all_train_data['SOLAR ERCOT'].shift(1)))
+all_train_data['WIND PERCENT CHANGE'] = (2 * (all_train_data['WIND ERCOT'] - all_train_data['WIND ERCOT'].shift(1)) /
+                                         (all_train_data['WIND ERCOT'] + all_train_data['WIND ERCOT'].shift(1)))
+all_train_data['WIND PERCENT CHANGE'] = all_train_data['WIND PERCENT CHANGE'].fillna(0)
+all_train_data['SOLAR PERCENT CHANGE'] = all_train_data['SOLAR PERCENT CHANGE'].fillna(0)
+data_predict['HOUR'] = data_predict['DATETIME'].dt.hour
+data_predict['DAY OF WEEK'] = data_predict['DATETIME'].dt.dayofweek
+data_predict['WIND FRACTION'] = data_predict['WIND ERCOT'] / data_predict['LOAD ERCOT']
+data_predict['RENEWABLE FRACTION'] = ((data_predict['SOLAR ERCOT'] + data_predict['WIND ERCOT']) /
+                                      data_predict['LOAD ERCOT'])
+data_predict['SOLAR PERCENT CHANGE'] = (2 * (data_predict['SOLAR ERCOT'] - data_predict['SOLAR ERCOT'].shift(1)) /
+                                        (data_predict['SOLAR ERCOT'] + data_predict['SOLAR ERCOT'].shift(1)))
+data_predict['WIND PERCENT CHANGE'] = (2 * (data_predict['WIND ERCOT'] - data_predict['WIND ERCOT'].shift(1)) /
+                                       (data_predict['WIND ERCOT'] + data_predict['WIND ERCOT'].shift(1)))
+data_predict['WIND PERCENT CHANGE'] = data_predict['WIND PERCENT CHANGE'].fillna(0)
+data_predict['SOLAR PERCENT CHANGE'] = data_predict['SOLAR PERCENT CHANGE'].fillna(0)
+print('REG UP:\n', reg_up, '\nREG DOWN:\n', reg_down, '\nDATA TRAIN:\n', data_train, '\nDATA PREDICT:\n', data_predict,
+      '\nDATETIME TRAIN:\n', date_time_train, '\nDATETIME PREDICT:\n', date_time_predict)
+
+all_train_data.to_csv('throughput_data_train', index=False)
+data_predict.to_csv('throughput_data_predict', index=False)
